@@ -1,0 +1,16 @@
+# Blueprint Render: deploy otomatis dari repo GitHub
+services:
+  - type: web
+    name: sikuli-ojk
+    runtime: python
+    plan: free
+    buildCommand: pip install -r requirements.txt
+    # 1 worker supaya muat di RAM paket gratis; timeout panjang untuk panggilan GenAI
+    startCommand: gunicorn app:server --bind 0.0.0.0:$PORT --workers 1 --threads 4 --timeout 300
+    envVars:
+      - key: PYTHON_VERSION
+        value: 3.12.7
+      - key: GEMINI_API_KEY
+        sync: false   # diisi manual di dashboard Render, tidak disimpan di repo
+      - key: ANTHROPIC_API_KEY
+        sync: false

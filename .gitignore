@@ -1,0 +1,12 @@
+# Rahasia — JANGAN di-commit (isi API key lewat Environment di Render)
+.env
+
+# Environment & cache Python
+.venv/
+venv/
+__pycache__/
+*.pyc
+
+# File sistem
+.DS_Store
+Thumbs.db
