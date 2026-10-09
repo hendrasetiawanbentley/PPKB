@@ -14,6 +14,7 @@ import pandas as pd
 from utils.portfolio_data import (
     ALL_COMPANIES, SEKTOR_LIST, SEKTOR_SHORT, ENTITAS_TYPES,
     CALK_THEME_DETAILS, DATA_LABEL, TAHUN_LAPORAN,
+    SUMBER_LK, SUMBER_APOLO, KOMPARASI_TOLERANSI_PCT,
     get_portfolio_summary, get_kepatuhan_portfolio_data,
     get_komparasi_portfolio_data, get_rasio_portfolio_data,
     get_calk_portfolio_data, get_kesimpulan_portfolio_data
@@ -112,13 +113,13 @@ def _create_komparasi_bar():
         y=list(mismatch_by_sektor.values()),
         color=x_labels,
         color_discrete_sequence=["#2563EB", "#7C3AED", "#0D9488", "#EA580C", "#DC2626", "#16A34A", "#0891B2", "#B45309"],
-        labels={"x": "Sektor", "y": "Jumlah Mismatch"}
+        labels={"x": "Sektor", "y": "Akun Tidak Sesuai"}
     )
     fig.update_layout(
         showlegend=False, margin=dict(t=20, b=40, l=20, r=20),
         height=260, paper_bgcolor="rgba(0,0,0,0)", plot_bgcolor="rgba(0,0,0,0)"
     )
-    fig.update_xaxes(tickangle=0, tickfont=dict(size=9.5, color="#4B5563"))
+    fig.update_xaxes(tickangle=-30, tickfont=dict(size=9.5, color="#4B5563"))
     return fig
 
 
@@ -303,15 +304,17 @@ def render_tab_content(tab):
             html.Div([
                 # Left Bar Chart
                 html.Div([
-                    html.Div("Distribusi Mismatch Material per Sektor", style={"fontSize": "14px", "fontWeight": "700", "color": "#111827", "marginBottom": "8px"}),
+                    html.Div("Akun Tidak Sesuai (LK vs APOLO) per Sektor", style={"fontSize": "14px", "fontWeight": "700", "color": "#111827", "marginBottom": "8px"}),
                     dcc.Graph(figure=_create_komparasi_bar(), config={"displayModeBar": False})
                 ], style={"flex": "1", "minWidth": "300px"}),
 
                 # Right Table
                 html.Div([
-                    html.Div("Akun Keuangan Paling Sering Mismatch", style={"fontSize": "14px", "fontWeight": "700", "color": "#111827", "marginBottom": "12px"}),
+                    html.Div("Akun Paling Sering Tidak Sesuai dengan APOLO", style={"fontSize": "14px", "fontWeight": "700", "color": "#111827", "marginBottom": "4px"}),
+                    html.Div(f"Membandingkan {SUMBER_LK} dengan {SUMBER_APOLO}; ditandai bila selisih > {KOMPARASI_TOLERANSI_PCT:g}%.",
+                             style={"fontSize": "12px", "color": "#6B7280", "marginBottom": "12px"}),
                     html.Table([
-                        html.Thead(html.Tr([html.Th("Akun Keuangan"), html.Th("Jumlah Flag"), html.Th("Persentase LK"), html.Th("Tingkat Keparahan")])),
+                        html.Thead(html.Tr([html.Th("Akun Keuangan"), html.Th("Jumlah LK Tidak Sesuai"), html.Th("Persentase LK"), html.Th("Tingkat Keparahan")])),
                         html.Tbody([
                             html.Tr([
                                 html.Td(item["akun"]),
@@ -579,7 +582,7 @@ def update_directory_table(search_val, sektor_val, entitas_type_val, status_anal
             html.Th("Status Analisis"),
             html.Th("Skor Kepatuhan"),
             html.Th("Risk Flag ML"),
-            html.Th("Mismatch"),
+            html.Th("Mismatch APOLO"),
             html.Th("Aksi Analisis")
         ])),
         html.Tbody(rows)

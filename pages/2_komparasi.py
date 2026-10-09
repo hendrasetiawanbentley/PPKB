@@ -68,7 +68,7 @@ layout = html.Div(
                             },
                         ),
                         html.P(
-                            "Perbandingan akun laporan keuangan antar kuartal — mendeteksi mismatch melebihi ambang batas.",
+                            "Perbandingan nilai akun di Laporan Keuangan dengan laporan terstruktur OJK di APOLO — menandai akun yang selisihnya melebihi ambang batas.",
                             style={
                                 "margin": "4px 0 0",
                                 "fontSize": "13px",
@@ -202,10 +202,10 @@ def _empty_state():
     )
 
 
-def _status_badge(is_mismatch):
+def _status_badge(is_mismatch, label_mismatch="MISMATCH"):
     if is_mismatch:
         return html.Span(
-            "MISMATCH",
+            label_mismatch,
             style={
                 "background": "#FEF2F2",
                 "color": "#DC2626",
@@ -228,14 +228,49 @@ def _status_badge(is_mismatch):
     )
 
 
+def _komparasi_view(sheet_data):
+    """Tentukan kolom & label sesuai jenis komparasi.
+    mode "apolo"  : nilai LK vs nilai Laporan Tahunan APOLO (semua akun ditampilkan)
+    mode lainnya  : nilai periode Y-1 vs Y (hasil upload; hanya akun mismatch)"""
+    if sheet_data.get("mode") == "apolo":
+        thr = sheet_data.get("threshold_pct", 5.0)
+        return {
+            "apolo": True, "threshold": thr,
+            "rows": sheet_data.get("rows", sheet_data.get("mismatches", [])),
+            "key_a": "nilai_lk", "key_b": "nilai_apolo",
+            "label_a": "Nilai LK (Rp miliar)", "label_b": "Nilai APOLO (Rp miliar)",
+            "info_a": (sheet_data.get("sumber_a", "Laporan Keuangan"), "Sumber"),
+            "info_b": (sheet_data.get("sumber_b", "Laporan Tahunan APOLO"), "Pembanding"),
+            "label_mm": "TIDAK SESUAI", "label_count": f"Tidak Sesuai (> {thr:g}%)",
+        }
+    thr = sheet_data.get("threshold_pct", 30.0)
+    return {
+        "apolo": False, "threshold": thr,
+        "rows": sheet_data.get("mismatches", []),
+        "key_a": "nilai_y1", "key_b": "nilai_y",
+        "label_a": "Nilai Y-1", "label_b": "Nilai Y",
+        "info_a": (sheet_data.get("q_prev", "-"), "Periode Y-1"),
+        "info_b": (sheet_data.get("q_curr", "-"), "Periode Y"),
+        "label_mm": "MISMATCH", "label_count": "Mismatch",
+    }
+
+
 def _build_sheet_card(sheet_name, sheet_data):
     """Build a result card for one sheet (emiten)."""
+    v = _komparasi_view(sheet_data)
     mismatches = sheet_data.get("mismatches", [])
-    q_curr = sheet_data.get("q_curr", "-")
-    q_prev = sheet_data.get("q_prev", "-")
     narrative = sheet_data.get("narrative", "")
     total_akun = sheet_data.get("total_akun", 0)
     n_mismatch = len(mismatches)
+
+    def _info(value, label):
+        return html.Div(
+            [
+                html.Div(value, style={"fontSize": "14px", "fontWeight": "700", "color": "#374151"}),
+                html.Div(label, style={"fontSize": "11px", "color": "#6B7280", "marginTop": "2px"}),
+            ],
+            style={"textAlign": "center", "flex": "1.4" if v["apolo"] else "1"},
+        )
 
     # Summary strip
     summary_strip = html.Div(
@@ -250,24 +285,12 @@ def _build_sheet_card(sheet_name, sheet_data):
             html.Div(
                 [
                     html.Div(str(n_mismatch), style={"fontSize": "26px", "fontWeight": "800", "color": "#DC2626" if n_mismatch else "#16A34A"}),
-                    html.Div("Mismatch", style={"fontSize": "11px", "color": "#6B7280", "marginTop": "2px"}),
+                    html.Div(v["label_count"], style={"fontSize": "11px", "color": "#6B7280", "marginTop": "2px"}),
                 ],
                 style={"textAlign": "center", "flex": "1"},
             ),
-            html.Div(
-                [
-                    html.Div(q_prev, style={"fontSize": "14px", "fontWeight": "700", "color": "#374151"}),
-                    html.Div("Periode Y-1", style={"fontSize": "11px", "color": "#6B7280", "marginTop": "2px"}),
-                ],
-                style={"textAlign": "center", "flex": "1"},
-            ),
-            html.Div(
-                [
-                    html.Div(q_curr, style={"fontSize": "14px", "fontWeight": "700", "color": "#374151"}),
-                    html.Div("Periode Y", style={"fontSize": "11px", "color": "#6B7280", "marginTop": "2px"}),
-                ],
-                style={"textAlign": "center", "flex": "1"},
-            ),
+            _info(*v["info_a"]),
+            _info(*v["info_b"]),
         ],
         style={
             "display": "flex",
@@ -281,7 +304,7 @@ def _build_sheet_card(sheet_name, sheet_data):
     )
 
     # Table
-    header_labels = ["Akun", f"Nilai Y-1", f"Nilai Y", "Selisih", "Selisih (%)", "Status"]
+    header_labels = ["Akun", v["label_a"], v["label_b"], "Selisih", "Selisih (%)", "Status"]
     thead = html.Thead(
         html.Tr(
             [html.Th(h, style={"padding": "10px 12px", "fontSize": "11px", "fontWeight": "700",
@@ -292,18 +315,18 @@ def _build_sheet_card(sheet_name, sheet_data):
     )
 
     rows = []
-    for m in mismatches:
+    for m in v["rows"]:
         pct = m.get("pct", 0)
-        is_mis = abs(pct) >= 30
+        is_mis = m["mismatch"] if "mismatch" in m else abs(pct) >= v["threshold"]
         rows.append(
             html.Tr(
                 [
                     html.Td(m.get("akun", ""), style={"padding": "9px 12px", "fontSize": "13px", "fontWeight": "500"}),
-                    html.Td(f"{m.get('nilai_y1', 0):,.0f}", style={"padding": "9px 12px", "fontSize": "13px", "fontVariantNumeric": "tabular-nums"}),
-                    html.Td(f"{m.get('nilai_y', 0):,.0f}", style={"padding": "9px 12px", "fontSize": "13px", "fontVariantNumeric": "tabular-nums"}),
+                    html.Td(f"{m.get(v['key_a'], 0):,.0f}", style={"padding": "9px 12px", "fontSize": "13px", "fontVariantNumeric": "tabular-nums"}),
+                    html.Td(f"{m.get(v['key_b'], 0):,.0f}", style={"padding": "9px 12px", "fontSize": "13px", "fontVariantNumeric": "tabular-nums"}),
                     html.Td(f"{m.get('selisih', 0):,.0f}", style={"padding": "9px 12px", "fontSize": "13px", "fontVariantNumeric": "tabular-nums"}),
                     html.Td(
-                        f"{pct:+.1f}%",
+                        f"{pct:+.2f}%" if v["apolo"] else f"{pct:+.1f}%",
                         style={
                             "padding": "9px 12px",
                             "fontSize": "13px",
@@ -312,7 +335,7 @@ def _build_sheet_card(sheet_name, sheet_data):
                             "fontVariantNumeric": "tabular-nums",
                         },
                     ),
-                    html.Td(_status_badge(is_mis), style={"padding": "9px 12px"}),
+                    html.Td(_status_badge(is_mis, v["label_mm"]), style={"padding": "9px 12px"}),
                 ],
                 style={"borderBottom": f"1px solid {BORDER}"},
             )
@@ -425,7 +448,7 @@ def render_komparasi(pipeline_json):
                     html.Div(
                         [
                             html.Div(str(total_mismatch), style={"fontSize": "32px", "fontWeight": "800", "color": "#DC2626" if total_mismatch else "#16A34A"}),
-                            html.Div("Total Mismatch", style={"fontSize": "12px", "color": "#6B7280", "marginTop": "4px"}),
+                            html.Div("Total Akun Tidak Sesuai", style={"fontSize": "12px", "color": "#6B7280", "marginTop": "4px"}),
                         ],
                         style={"textAlign": "center", "flex": "1"},
                     ),
@@ -462,9 +485,13 @@ def download_excel(n_clicks, raw_json):
     data = json.loads(raw_json)
     sheets = {}
     for sheet_name, sheet_data in data.items():
-        rows = sheet_data.get("mismatches", [])
+        v = _komparasi_view(sheet_data)
+        rows = v["rows"]
         if rows:
-            df = pd.DataFrame(rows)
+            df = pd.DataFrame(rows).rename(columns={
+                v["key_a"]: v["label_a"], v["key_b"]: v["label_b"],
+                "selisih": "Selisih", "pct": "Selisih (%)", "akun": "Akun", "mismatch": "Tidak Sesuai",
+            })
             sheets[sheet_name] = df
     if not sheets:
         return no_update
@@ -486,17 +513,23 @@ def download_pdf(n_clicks, raw_json):
 
     sections = []
     for sheet_name, sheet_data in data.items():
+        v = _komparasi_view(sheet_data)
         mismatches = sheet_data.get("mismatches", [])
         narrative = sheet_data.get("narrative", "")
         sections.append({"type": "heading", "text": f"2. Komparasi — {sheet_name}"})
-        sections.append({"type": "paragraph", "text": f"{len(mismatches)} akun MISMATCH ditemukan."})
-        if mismatches:
+        if v["apolo"]:
+            sections.append({"type": "paragraph", "text": f"{v['info_a'][0]} dibandingkan dengan {v['info_b'][0]}: "
+                             f"{len(mismatches)} akun tidak sesuai (selisih > {v['threshold']:g}%)."})
+        else:
+            sections.append({"type": "paragraph", "text": f"{len(mismatches)} akun MISMATCH ditemukan."})
+        if v["rows"]:
             sections.append({
                 "type": "table",
-                "headers": ["Akun", "Nilai Y-1", "Nilai Y", "Selisih", "Selisih (%)"],
+                "headers": ["Akun", v["label_a"], v["label_b"], "Selisih", "Selisih (%)"],
                 "rows": [
-                    [r.get("akun", ""), r.get("nilai_y1", ""), r.get("nilai_y", ""), r.get("selisih", ""), f"{r.get('pct', 0):.1f}%"]
-                    for r in mismatches
+                    [r.get("akun", ""), f"{r.get(v['key_a'], 0):,.0f}", f"{r.get(v['key_b'], 0):,.0f}",
+                     f"{r.get('selisih', 0):,.0f}", f"{r.get('pct', 0):.2f}%"]
+                    for r in v["rows"]
                 ][:40],
             })
         if narrative:

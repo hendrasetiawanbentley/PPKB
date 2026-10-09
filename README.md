@@ -34,9 +34,11 @@ ojk_dashboard/
 - **Modul 1 (Kepatuhan)**: upload 1 dokumen laporan (.pdf) → checklist 22 kriteria emiten
   sudah tertanam di `CHECKLIST_ITEMS` (`pages/1_kepatuhan.py`) → GenAI isi Status/Hasil AI/
   Halaman/Catatan AI, nama entitas & periode diekstrak otomatis dari dokumen.
-- **Modul 2 (Komparasi)**: upload Excel (format sama modul 5), pilih sheet/emiten → sistem
-  hitung selisih tiap akun antar kuartal berurutan, tandai MISMATCH bila perubahan
-  ≥30% (`MISMATCH_THRESHOLD_PCT`), GenAI simpulkan implikasinya.
+- **Modul 2 (Komparasi)**: membandingkan nilai akun di Laporan Keuangan dengan laporan
+  terstruktur OJK di **APOLO** (Laporan Tahunan); akun ditandai TIDAK SESUAI bila selisih
+  > 5% (`KOMPARASI_TOLERANSI_PCT` di `utils/portfolio_data.py`). Saat ini baru diterapkan
+  pada data dummy; analisis file upload masih membandingkan antar periode (Y vs Y-1, ≥30%,
+  `MISMATCH_THRESHOLD_PCT` di `utils/pipeline.py`).
 - **Modul 3 (Rasio)**: upload Excel, pilih sheet/emiten → hitung 9 rasio keuangan kuartal
   terbaru, banding ke `THRESHOLDS`, GenAI simpulkan kondisi kesehatan keuangan.
 - **Modul 4 (CaLK)**: upload 1 dokumen laporan (.pdf) → GenAI baca isi & ekstrak catatan

@@ -15,6 +15,7 @@ Cara mengubah data dummy:
   * Ubah rasio & acuan   -> BANK_RATIOS, BUS_RATIOS, ASR_RATIOS
   * Ubah akun komparasi  -> BANK_ACCOUNTS, BUS_ACCOUNTS, ASR_ACCOUNTS
   * Tahun laporan        -> TAHUN_LAPORAN
+  * Ambang komparasi APOLO -> KOMPARASI_TOLERANSI_PCT
 """
 
 import random
@@ -23,6 +24,12 @@ import pandas as pd
 TAHUN_LAPORAN = 2025
 TAHUN_PEMBANDING = TAHUN_LAPORAN - 1
 DATA_LABEL = "Data Simulasi (Dummy)"
+
+# Analisis Komparasi: angka di Laporan Keuangan (LK) dibandingkan dengan laporan
+# terstruktur yang disampaikan ke OJK melalui APOLO (Laporan Tahunan).
+SUMBER_LK = f"Laporan Keuangan Audited {TAHUN_LAPORAN}"
+SUMBER_APOLO = f"Laporan Tahunan APOLO {TAHUN_LAPORAN}"
+KOMPARASI_TOLERANSI_PCT = 5.0   # selisih > 5% dari nilai APOLO -> "Tidak Sesuai"
 
 # ── Kategori entitas & sektor ─────────────────────────────────────────────────
 ENTITAS_TYPES = {
@@ -380,25 +387,31 @@ def _checklist_for(company):
 
 
 def _komparasi_for(company, rng):
+    """Bandingkan nilai akun di LK dengan nilai di Laporan Tahunan APOLO (simulasi)."""
     accounts = ACCOUNTS_BY_TYPE[company["entitas_type"]]
     aset = company["total_aset_miliar"]
     n_mm = min(company["mismatch_count"], len(accounts))
     mm_idx = set(rng.sample(range(len(accounts)), n_mm))
     items = []
     for i, (akun, bobot) in enumerate(accounts):
-        v_y = aset * bobot * rng.uniform(0.85, 1.15)
+        v_lk = aset * bobot * rng.uniform(0.85, 1.15)
         if i in mm_idx:
-            g = rng.choice([1, -1]) * rng.uniform(0.31, 0.62)
+            # selisih material: lebih dari ambang toleransi
+            d = rng.choice([1, -1]) * rng.uniform(KOMPARASI_TOLERANSI_PCT + 0.6, 22.0)
+        elif rng.random() < 0.6:
+            d = 0.0                                   # sama persis
         else:
-            g = rng.uniform(-0.06, 0.18)
-        v_y1 = v_y / (1 + g)
-        pct = (v_y - v_y1) / v_y1 * 100
+            d = rng.choice([1, -1]) * rng.uniform(0.05, 2.5)   # selisih kecil (pembulatan/reklasifikasi)
+        v_apolo = v_lk / (1 + d / 100)
+        selisih = v_lk - v_apolo
+        pct = selisih / v_apolo * 100 if v_apolo else 0.0
         items.append({
             "akun": akun,
-            "val_y": f"{v_y:,.1f} M", "val_y1": f"{v_y1:,.1f} M",
-            "perubahan_pct": f"{pct:+.1f}%",
-            "mismatch": i in mm_idx,
-            "num_y": round(v_y, 2), "num_y1": round(v_y1, 2), "pct": round(pct, 1),
+            "val_lk": f"{v_lk:,.1f} M", "val_apolo": f"{v_apolo:,.1f} M",
+            "selisih_pct": f"{pct:+.2f}%",
+            "mismatch": abs(pct) > KOMPARASI_TOLERANSI_PCT,
+            "num_lk": round(v_lk, 2), "num_apolo": round(v_apolo, 2),
+            "selisih": round(selisih, 2), "pct": round(pct, 2),
         })
     return items
 
@@ -563,8 +576,9 @@ def get_mock_company_deep_dive(comp_id):
         },
         "komparasi": {
             "mismatch_count": n_mm,
-            "summary": f"Ditemukan {n_mm} variansi material (selisih ≥30%) antar periode {TAHUN_LAPORAN} vs {TAHUN_PEMBANDING}." if n_mm
-                       else f"Tidak ditemukan variansi material (≥30%) antar periode {TAHUN_LAPORAN} vs {TAHUN_PEMBANDING}.",
+            "summary": (f"Ditemukan {n_mm} dari {len(kompar_items)} akun yang nilainya tidak sesuai antara LK dan {SUMBER_APOLO} "
+                        f"(selisih > {KOMPARASI_TOLERANSI_PCT:g}%)." if n_mm
+                        else f"Seluruh {len(kompar_items)} akun di LK sesuai dengan {SUMBER_APOLO} (selisih ≤ {KOMPARASI_TOLERANSI_PCT:g}%)."),
             "items": kompar_items,
         },
         "rasio": {"items": rasio_items, "n_perhatian": n_warn},
@@ -638,7 +652,7 @@ def get_kepatuhan_portfolio_data():
 
 
 def get_komparasi_portfolio_data():
-    """Modul 2: mismatch per sektor + akun yang paling sering mismatch."""
+    """Modul 2: akun tidak sesuai (LK vs APOLO) per sektor + akun yang paling sering tidak sesuai."""
     n = len(ANALYZED_COMPANIES)
     mismatch_by_sektor = {s: 0 for s in SEKTOR_LIST}
     counter = {}
@@ -651,7 +665,7 @@ def get_komparasi_portfolio_data():
     mismatch_categories = []
     for akun, flags in top:
         pct = _pct(flags, n)
-        severity = "Tinggi" if pct >= 15 else ("Sedang" if pct >= 7 else "Rendah")
+        severity = "Tinggi" if pct >= 15 else ("Sedang" if pct >= 7 else "Rendah")  # porsi LK terdampak
         mismatch_categories.append({"akun": akun, "flags": flags, "pct": pct, "severity": severity})
     return {"mismatch_by_sektor": mismatch_by_sektor, "mismatch_categories": mismatch_categories}
 
@@ -786,11 +800,12 @@ def build_full_pipeline_store(comp_id=None):
 
     calk_findings = deep["calk"]["findings"]
 
-    mismatches = [
-        {"akun": i["akun"], "nilai_y1": i["num_y1"], "nilai_y": i["num_y"],
-         "selisih": round(i["num_y"] - i["num_y1"], 2), "pct": i["pct"]}
-        for i in deep["komparasi"]["items"] if i["mismatch"]
+    kompar_rows = [
+        {"akun": i["akun"], "nilai_lk": i["num_lk"], "nilai_apolo": i["num_apolo"],
+         "selisih": i["selisih"], "pct": i["pct"], "mismatch": i["mismatch"]}
+        for i in deep["komparasi"]["items"]
     ]
+    mismatches = [r for r in kompar_rows if r["mismatch"]]
 
     rasio_rows = [
         {
@@ -828,8 +843,12 @@ def build_full_pipeline_store(comp_id=None):
         "meta": meta, "catatan_signifikan": calk_findings, "narrative": deep["calk"]["narrative"],
         "tentang_entitas": f"Pengungkapan Catatan atas Laporan Keuangan {company['nama']}. [{DATA_LABEL}]",
     }
-    komparasi = {ticker: {"total_akun": len(deep["komparasi"]["items"]), "q_curr": q_curr, "q_prev": q_prev,
-                          "mismatches": mismatches, "narrative": deep["komparasi"]["summary"]}}
+    komparasi = {ticker: {
+        "mode": "apolo", "threshold_pct": KOMPARASI_TOLERANSI_PCT,
+        "sumber_a": SUMBER_LK, "sumber_b": SUMBER_APOLO,
+        "total_akun": len(kompar_rows), "rows": kompar_rows, "mismatches": mismatches,
+        "q_curr": q_curr, "q_prev": q_prev, "narrative": deep["komparasi"]["summary"],
+    }}
     rasio = {ticker: {"q_curr": q_curr, "q_prev": q_prev, "rasio_rows": rasio_rows, "narrative": rasio_narr}}
 
     return {
@@ -885,14 +904,16 @@ def get_kesimpulan_portfolio_data():
 
     # 2. Komparasi
     total_mm = sum(km["mismatch_by_sektor"].values())
-    teks = f"Terdapat {total_mm} selisih material (≥30%) antar periode {TAHUN_LAPORAN} vs {TAHUN_PEMBANDING}."
+    teks = (f"Terdapat {total_mm} akun yang nilainya di LK tidak sesuai dengan {SUMBER_APOLO} "
+            f"(selisih > {KOMPARASI_TOLERANSI_PCT:g}%).")
     if total_mm:
         sektor_top = max(km["mismatch_by_sektor"].items(), key=lambda kv: kv[1])[0]
         teks += f" Terbanyak pada sektor {sektor_top}."
     if km["mismatch_categories"]:
         a = km["mismatch_categories"][0]
-        teks += f" Akun paling sering berubah material: {a['akun']} ({a['flags']} LK)."
-        rekomendasi.append(f"Telaah penyebab perubahan material pada akun \"{a['akun']}\" bersama manajemen emiten terkait.")
+        teks += f" Akun paling sering tidak sesuai: {a['akun']} ({a['flags']} LK)."
+        rekomendasi.append(f"Konfirmasi ke emiten penyebab perbedaan akun \"{a['akun']}\" antara LK dan APOLO, "
+                           f"dan minta koreksi laporan APOLO bila angka LK audited yang benar.")
     temuan.append({"modul": "Analisis Komparasi", "icon": "📊", "teks": teks})
 
     # 3. Rasio
