@@ -443,16 +443,16 @@ def ml_check_company_confirmed(confirmed_data):
 def render_ml_voting(pipeline_json):
     from utils.portfolio_data import build_full_pipeline_store
     if not pipeline_json:
-        pipeline_json = build_full_pipeline_store("IDX-PTBA")
+        pipeline_json = build_full_pipeline_store()
 
     try:
         result = json.loads(pipeline_json) if isinstance(pipeline_json, str) else pipeline_json
         ml_data = result.get("excel", {}).get("ml", {}) or result.get("pdf", {}).get("ml_voting", {})
     except Exception:
-        ml_data = build_full_pipeline_store("IDX-PTBA")["excel"]["ml"]
+        ml_data = build_full_pipeline_store()["excel"]["ml"]
 
     if not ml_data:
-        ml_data = build_full_pipeline_store("IDX-PTBA")["excel"]["ml"]
+        ml_data = build_full_pipeline_store()["excel"]["ml"]
 
     # Overall summary
     n_total = len(ml_data)

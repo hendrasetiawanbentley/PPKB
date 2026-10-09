@@ -393,16 +393,16 @@ def _build_sheet_card(sheet_name, sheet_data):
 def render_komparasi(pipeline_json):
     from utils.portfolio_data import build_full_pipeline_store
     if not pipeline_json:
-        pipeline_json = build_full_pipeline_store("IDX-PTBA")
+        pipeline_json = build_full_pipeline_store()
 
     try:
         result = json.loads(pipeline_json) if isinstance(pipeline_json, str) else pipeline_json
         komparasi_data = result.get("excel", {}).get("komparasi", {}) or result.get("pdf", {}).get("komparasi", {})
     except Exception:
-        komparasi_data = build_full_pipeline_store("IDX-PTBA")["excel"]["komparasi"]
+        komparasi_data = build_full_pipeline_store()["excel"]["komparasi"]
 
     if not komparasi_data:
-        komparasi_data = build_full_pipeline_store("IDX-PTBA")["excel"]["komparasi"]
+        komparasi_data = build_full_pipeline_store()["excel"]["komparasi"]
 
     # Overall summary
     total_mismatch = sum(len(s.get("mismatches", [])) for s in komparasi_data.values())

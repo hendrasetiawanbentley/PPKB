@@ -204,7 +204,7 @@ def _section_card(number, title, narrative_text, color):
 def render_kesimpulan(store_data):
     from utils.portfolio_data import build_full_pipeline_store
     if not store_data:
-        store_data = build_full_pipeline_store("IDX-PTBA")
+        store_data = build_full_pipeline_store()
 
     data = store_data if isinstance(store_data, dict) else json.loads(store_data)
     pdf_data = data.get("pdf", {})

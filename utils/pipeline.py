@@ -30,6 +30,10 @@ MISMATCH_THRESHOLD_PCT = 30.0
 def detect_entitas_type(meta, doc_context):
     name = (meta.get("nama_entitas", "") or "").lower()
     text_lower = (doc_context[:20000] or "").lower()
+    # Bank & perusahaan asuransi tercatat = emiten -> checklist EPP.
+    # Dicek lebih dulu supaya "Bank Danamon" / "Bina Dana Arta" tidak terbaca sebagai Reksa Dana.
+    if any(k in name for k in ("bank", "asuransi", "reasuransi", "insurance", "life", "assurance")):
+        return "EPP"
     if "reksa dana" in name or "reksa dana" in text_lower or "mutual fund" in text_lower or "dana" in name:
         return "RD"
     elif "manajer investasi" in name or "asset management" in name or "investasi" in name:

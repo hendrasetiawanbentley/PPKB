@@ -35,10 +35,16 @@ ACCENT_LIGHT = "#F0FDFA"
 
 
 # ── Helpers ───────────────────────────────────────────────────────────
-def format_ratio_value(name, val):
-    """Format a ratio value for display — percentages vs raw numbers."""
+def format_ratio_value(name, val, satuan=None):
+    """Format a ratio value for display — percentages vs raw numbers.
+    satuan="%" berarti nilai disimpan sebagai pecahan (0.1585 -> 15.85%)."""
     if val is None or val == "-":
         return "-"
+    if satuan == "%":
+        try:
+            return f"{float(val) * 100:.2f}%"
+        except (TypeError, ValueError):
+            return str(val)
     if isinstance(val, str) and ("%" in val or "x" in val):
         return val
     try:
@@ -178,11 +184,11 @@ def _build_sheet_card(sheet_name, sheet_data):
                     ),
                     html.Td(r.get("rasio", ""), style={**cell_base, "fontWeight": "600"}),
                     html.Td(
-                        format_ratio_value(r.get("rasio", ""), r.get("y1")),
+                        format_ratio_value(r.get("rasio", ""), r.get("y1"), r.get("satuan")),
                         style={**cell_base, "fontVariantNumeric": "tabular-nums"},
                     ),
                     html.Td(
-                        format_ratio_value(r.get("rasio", ""), r.get("y")),
+                        format_ratio_value(r.get("rasio", ""), r.get("y"), r.get("satuan")),
                         style={**cell_base, "fontVariantNumeric": "tabular-nums", "fontWeight": "600"},
                     ),
                     html.Td(_trend_indicator(r.get("y1"), r.get("y")), style={**cell_base, "textAlign": "center"}),
@@ -442,16 +448,16 @@ def rs_check_company_confirmed(confirmed_data):
 def render_rasio(pipeline_json):
     from utils.portfolio_data import build_full_pipeline_store
     if not pipeline_json:
-        pipeline_json = build_full_pipeline_store("IDX-PTBA")
+        pipeline_json = build_full_pipeline_store()
 
     try:
         result = json.loads(pipeline_json) if isinstance(pipeline_json, str) else pipeline_json
         rasio_data = result.get("excel", {}).get("rasio", {}) or result.get("pdf", {}).get("rasio", {})
     except Exception:
-        rasio_data = build_full_pipeline_store("IDX-PTBA")["excel"]["rasio"]
+        rasio_data = build_full_pipeline_store()["excel"]["rasio"]
 
     if not rasio_data:
-        rasio_data = build_full_pipeline_store("IDX-PTBA")["excel"]["rasio"]
+        rasio_data = build_full_pipeline_store()["excel"]["rasio"]
 
     # Overall summary
     total_rasio = sum(len(s.get("rasio_rows", [])) for s in rasio_data.values())
@@ -519,8 +525,8 @@ def download_excel(n_clicks, raw_json):
                 "No": r.get("no", ""),
                 "Kategori": r.get("kategori", ""),
                 "Rasio": r.get("rasio", ""),
-                f"Nilai Y-1 ({q_prev})": format_ratio_value(r.get("rasio", ""), r.get("y1")),
-                f"Nilai Y ({q_curr})": format_ratio_value(r.get("rasio", ""), r.get("y")),
+                f"Nilai Y-1 ({q_prev})": format_ratio_value(r.get("rasio", ""), r.get("y1"), r.get("satuan")),
+                f"Nilai Y ({q_curr})": format_ratio_value(r.get("rasio", ""), r.get("y"), r.get("satuan")),
                 "Analisis AI": r.get("analisis_ai", ""),
             })
         if rows:
@@ -578,8 +584,8 @@ def download_pdf(n_clicks, raw_json):
                 str(r.get("no", "")),
                 r.get("kategori", ""),
                 r.get("rasio", ""),
-                format_ratio_value(r.get("rasio", ""), r.get("y1")),
-                format_ratio_value(r.get("rasio", ""), r.get("y")),
+                format_ratio_value(r.get("rasio", ""), r.get("y1"), r.get("satuan")),
+                format_ratio_value(r.get("rasio", ""), r.get("y"), r.get("satuan")),
                 r.get("analisis_ai", ""),
             ])
         if tbl_rows:

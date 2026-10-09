@@ -166,12 +166,12 @@ def clk_check_company_confirmed(confirmed_data):
 def render_calk(store_data):
     from utils.portfolio_data import build_full_pipeline_store
     if not store_data:
-        store_data = build_full_pipeline_store("IDX-PTBA")
+        store_data = build_full_pipeline_store()
 
     data = store_data if isinstance(store_data, dict) else json.loads(store_data)
     clk = data.get("pdf", {}).get("calk") or data.get("excel", {}).get("calk")
     if not clk:
-        clk = build_full_pipeline_store("IDX-PTBA")["pdf"]["calk"]
+        clk = build_full_pipeline_store()["pdf"]["calk"]
 
     catatan = clk.get("catatan_signifikan", [])
     meta = clk.get("meta", {})

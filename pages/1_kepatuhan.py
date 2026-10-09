@@ -223,12 +223,12 @@ def _status_badge(status):
 def render_kepatuhan(store_data):
     from utils.portfolio_data import build_full_pipeline_store
     if not store_data:
-        store_data = build_full_pipeline_store("IDX-PTBA")
+        store_data = build_full_pipeline_store()
 
     data = store_data if isinstance(store_data, dict) else json.loads(store_data)
     kp = data.get("pdf", {}).get("kepatuhan") or data.get("excel", {}).get("kepatuhan")
     if not kp:
-        kp = build_full_pipeline_store("IDX-PTBA")["pdf"]["kepatuhan"]
+        kp = build_full_pipeline_store()["pdf"]["kepatuhan"]
 
     rows = kp.get("rows", [])
     for r in rows:

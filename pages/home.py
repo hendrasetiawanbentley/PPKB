@@ -1,8 +1,8 @@
 # -*- coding: utf-8 -*-
 """
 pages/home.py
-Beranda — Ringkasan Portofolio Executive Dashboard (100 Laporan Keuangan Tahunan, 50 Dianalisis).
-Agregasi Portofolio per Modul & Direktori Filterable 100 Perusahaan.
+Beranda — Ringkasan Portofolio emiten Perbankan & Asuransi (DATA SIMULASI dari utils/portfolio_data.py).
+Agregasi Portofolio per Modul & Direktori Filterable Perusahaan.
 """
 
 import dash
@@ -12,7 +12,8 @@ import plotly.express as px
 import pandas as pd
 
 from utils.portfolio_data import (
-    ALL_COMPANIES, SEKTOR_LIST,
+    ALL_COMPANIES, SEKTOR_LIST, SEKTOR_SHORT, ENTITAS_TYPES,
+    CALK_THEME_DETAILS, DATA_LABEL, TAHUN_LAPORAN,
     get_portfolio_summary, get_kepatuhan_portfolio_data,
     get_komparasi_portfolio_data, get_rasio_portfolio_data,
     get_calk_portfolio_data, get_ml_portfolio_data
@@ -23,40 +24,6 @@ dash.register_page(__name__, path="/", name="Ringkasan Portofolio")
 RED      = "#8B2E1F"
 RED_DARK = "#6B2017"
 WHITE    = "#FFFFFF"
-
-CALK_THEME_DETAILS = {
-    "Transaksi & Saldo Pihak Berelasi": [
-        {"ticker": "PTBA", "nama": "PT Bukit Asam Tbk", "temuan": "Penjualan batubara kepada entitas sepengendali PT PLN (Persero) sebesar 12.5% dari total pendapatan.", "halaman": "hal 45", "status": "Terindikasi Anomali"},
-        {"ticker": "ADRO", "nama": "PT Adaro Energy Indonesia Tbk", "temuan": "Pemberian pinjaman afiliasi tanpa jaminan kepada anak usaha PT Adaro Power sebesar 45M USD.", "halaman": "hal 68", "status": "Terindikasi Anomali"},
-        {"ticker": "MEDC", "nama": "PT Medco Energi Internasional Tbk", "temuan": "Transaksi piutang kepada pihak berelasi PT Medco Power Indonesia mengalami peningkatan signifikan.", "halaman": "hal 52", "status": "Perlu Reviu"},
-        {"ticker": "TPIA", "nama": "PT Chandra Asri Pacific Tbk", "temuan": "Pembelian bahan baku nafta dari entitas afiliasi Barito Group mencakup 35% dari total HPP.", "halaman": "hal 74", "status": "Perlu Reviu"},
-        {"ticker": "BRPT", "nama": "PT Barito Pacific Tbk", "temuan": "Penyediaan jaminan korporat (corporate guarantee) untuk fasilitas kredit anak perusahaan.", "halaman": "hal 89", "status": "Perlu Reviu"}
-    ],
-    "Liabilitas Kontinjensi & Sengketa Pajak": [
-        {"ticker": "INDY", "nama": "PT Indika Energy Tbk", "temuan": "Menerima Surat Ketetapan Pajak Kurang Bayar (SKPKB) PPh Badan masa pajak 2022 senilai 35.4M rupiah.", "halaman": "hal 58", "status": "Terindikasi Anomali"},
-        {"ticker": "BUMI", "nama": "PT Bumi Resources Tbk", "temuan": "Banding perpajakan atas SKPKB PPN senilai 120M rupiah masih dalam proses persidangan di Pengadilan Pajak.", "halaman": "hal 94", "status": "Terindikasi Anomali"},
-        {"ticker": "WSKT", "nama": "PT Waskita Karya (Persero) Tbk", "temuan": "Tuntutan hukum PKPU dari subkontraktor atas tagihan proyek yang belum terbayar senilai 15M.", "halaman": "hal 112", "status": "Terindikasi Anomali"},
-        {"ticker": "ADHI", "nama": "PT Adhi Karya (Persero) Tbk", "temuan": "Adanya jaminan pelaksanaan proyek yang berpotensi dicairkan oleh pemilik proyek akibat keterlambatan.", "halaman": "hal 83", "status": "Perlu Reviu"}
-    ],
-    "Restrukturisasi Utang & Kovenan Bank": [
-        {"ticker": "WSKT", "nama": "PT Waskita Karya (Persero) Tbk", "temuan": "Pelanggaran kovenan rasio leverage keuangan (Debt to Equity) pada kredit sindikasi bank Himbara.", "halaman": "hal 102", "status": "Terindikasi Anomali"},
-        {"ticker": "WIKA", "nama": "PT Wijaya Karya (Persero) Tbk", "temuan": "Proses negosiasi master restructuring agreement (MRA) untuk perpanjangan tenor obligasi jatuh tempo.", "halaman": "hal 91", "status": "Terindikasi Anomali"},
-        {"ticker": "APLN", "nama": "PT Agung Podomoro Land Tbk", "temuan": "Pelanggaran batas minimum kovenan Current Ratio (di bawah 1.0x) pada pinjaman sindikasi bank.", "halaman": "hal 73", "status": "Perlu Reviu"},
-        {"ticker": "LPKR", "nama": "PT Lippo Karawaci Tbk", "temuan": "Memperoleh waiver (kelonggaran) tertulis dari bank atas rasio EBITDA terhadap beban bunga.", "halaman": "hal 85", "status": "Perlu Reviu"}
-    ],
-    "Penurunan Nilai Aset (Impairment)": [
-        {"ticker": "GOTO", "nama": "PT GoTo Gojek Tokopedia Tbk", "temuan": "Pencatatan penurunan nilai goodwill (impairment) atas unit bisnis e-commerce sebesar 1.2T rupiah.", "halaman": "hal 105", "status": "Terindikasi Anomali"},
-        {"ticker": "BUKA", "nama": "PT Bukalapak.com Tbk", "temuan": "Penurunan nilai investasi pada entitas asosiasi akibat penurunan harga pasar saham yang material.", "halaman": "hal 67", "status": "Perlu Reviu"},
-        {"ticker": "EMTK", "nama": "PT Elang Mahkota Teknologi Tbk", "temuan": "Impairment aset teknologi dan perangkat lunak yang tidak lagi digunakan dalam operasional.", "halaman": "hal 54", "status": "Perlu Reviu"},
-        {"ticker": "HRUM", "nama": "PT Harum Energy Tbk", "temuan": "Penyisihan penurunan nilai aset pertambangan akibat revisi cadangan terbukti batubara.", "halaman": "hal 49", "status": "Perlu Reviu"}
-    ],
-    "Peristiwa Setelah Tanggal Neraca": [
-        {"ticker": "TLKM", "nama": "PT Telkom Indonesia (Persero) Tbk", "temuan": "Pembagian dividen final tahun buku 2023 sebesar 18.2T telah disetujui RUPS tanggal 15 Mei 2024.", "halaman": "hal 124", "status": "Perlu Reviu"},
-        {"ticker": "ASII", "nama": "PT Astra International Tbk", "temuan": "Akuisisi 100% saham perusahaan penyewaan alat berat terafiliasi diselesaikan pasca tanggal neraca.", "halaman": "hal 135", "status": "Perlu Reviu"},
-        {"ticker": "UNVR", "nama": "PT Unilever Indonesia Tbk", "temuan": "Pergantian Direktur Utama dan perubahan struktur kompensasi direksi disahkan dalam RUPS luar biasa.", "halaman": "hal 96", "status": "Perlu Reviu"},
-        {"ticker": "KLBF", "nama": "PT Kalbe Farma Tbk", "temuan": "Dampak devaluasi nilai tukar mata uang asing pada transaksi impor bahan baku obat setelah periode audit.", "halaman": "hal 82", "status": "Perlu Reviu"}
-    ]
-}
 
 # ── Helper Styles ─────────────────────────────────────────────────────────────
 def _kpi_card(title, value, subtitle, color="#8B2E1F", icon="📊"):
@@ -136,22 +103,15 @@ def _create_kepatuhan_donut():
 def _create_komparasi_bar():
     mismatch_by_sektor = KOMPARASI_DATA["mismatch_by_sektor"]
     
-    # Abbreviate sector names for clean chart presentation
-    abbr = {
-        "Barang Konsumen (FMCG & Ritel)": "FMCG & Ritel",
-        "Energi & Pertambangan": "Energi & Tambang",
-        "Infrastruktur & Telekomunikasi": "Infrastruktur",
-        "Perindustrian & Material Dasar": "Industri Dasar",
-        "Properti & Real Estat": "Properti & R.E."
-    }
-    x_labels = [abbr.get(k, k) for k in mismatch_by_sektor.keys()]
+    # Label sektor dipersingkat agar muat di sumbu grafik
+    x_labels = [SEKTOR_SHORT.get(k, k) for k in mismatch_by_sektor.keys()]
     
     fig = px.bar(
         x=x_labels,
         y=list(mismatch_by_sektor.values()),
         color=x_labels,
-        color_discrete_sequence=["#2563EB", "#7C3AED", "#0D9488", "#EA580C", "#DC2626"],
-        labels={"x": "Sektor industri", "y": "Jumlah Mismatch"}
+        color_discrete_sequence=["#2563EB", "#7C3AED", "#0D9488", "#EA580C", "#DC2626", "#16A34A", "#0891B2", "#B45309"],
+        labels={"x": "Sektor", "y": "Jumlah Mismatch"}
     )
     fig.update_layout(
         showlegend=False, margin=dict(t=20, b=40, l=20, r=20),
@@ -188,7 +148,7 @@ layout = html.Div([
                     "fontSize": "24px", "fontWeight": "900", "color": WHITE, "letterSpacing": "-0.3px"
                 }),
                 html.Div(
-                    "Monitoring & Analisis Laporan Keuangan Tahunan",
+                    f"Monitoring & Analisis Laporan Keuangan Tahunan {TAHUN_LAPORAN} — Emiten Perbankan & Asuransi ({DATA_LABEL})",
                     style={"fontSize": "13px", "color": "rgba(255,255,255,0.80)", "marginTop": "6px"}
                 )
             ]),
@@ -242,9 +202,10 @@ layout = html.Div([
                 })
             ]),
             html.Div([
-                html.Span(f"Menampilkan Data Portofolio", style={
-                    "fontSize": "12px", "fontWeight": "600", "color": "#4B5563",
-                    "background": "#F3F4F6", "padding": "6px 14px", "borderRadius": "20px"
+                html.Span(f"⚠️ {DATA_LABEL} — bukan hasil analisis sebenarnya", style={
+                    "fontSize": "12px", "fontWeight": "700", "color": "#92400E",
+                    "background": "#FFFBEB", "border": "1px solid #FDE68A",
+                    "padding": "6px 14px", "borderRadius": "20px"
                 })
             ])
         ], style={"display": "flex", "justifyContent": "space-between", "alignItems": "center", "marginBottom": "16px"}),
@@ -264,12 +225,8 @@ layout = html.Div([
                 dcc.Dropdown(
                     id="filter-entitas-type",
                     options=[
-                        {"label": "Semua Kategori", "value": "ALL"},
-                        {"label": "Emiten / Perusahaan Publik (EPP)", "value": "EPP"},
-                        {"label": "Reksa Dana (RD)", "value": "RD"},
-                        {"label": "Manajer Investasi (MI)", "value": "MI"},
-                        {"label": "Efek Syariah (DES)", "value": "DES"}
-                    ],
+                        {"label": "Semua Kategori", "value": "ALL"}
+                    ] + [{"label": f"{v} ({k})", "value": k} for k, v in ENTITAS_TYPES.items()],
                     value="ALL", clearable=False, style={"fontSize": "13px"}
                 )
             ], style={"width": "190px"}),
@@ -281,7 +238,7 @@ layout = html.Div([
                     options=[{"label": "Semua Sektor", "value": "ALL"}] + [{"label": s, "value": s} for s in SEKTOR_LIST],
                     value="ALL", clearable=False, style={"fontSize": "13px"}
                 )
-            ], style={"width": "180px"}),
+            ], style={"width": "210px"}),
 
             # Status Analisis Filter
             html.Div([
@@ -361,7 +318,7 @@ def render_tab_content(tab):
             html.Div([
                 # Left Bar Chart
                 html.Div([
-                    html.Div("Distribusi Mismatch Material per Sektor Industri", style={"fontSize": "14px", "fontWeight": "700", "color": "#111827", "marginBottom": "8px"}),
+                    html.Div("Distribusi Mismatch Material per Sektor", style={"fontSize": "14px", "fontWeight": "700", "color": "#111827", "marginBottom": "8px"}),
                     dcc.Graph(figure=_create_komparasi_bar(), config={"displayModeBar": False})
                 ], style={"flex": "1", "minWidth": "300px"}),
 
@@ -385,7 +342,7 @@ def render_tab_content(tab):
 
     elif tab == "tab-rasio":
         return html.Div([
-            html.Div("Ringkasan Sebaran 34 Rasio Keuangan Standar OJK", style={"fontSize": "14px", "fontWeight": "700", "color": "#111827", "marginBottom": "16px"}),
+            html.Div("Ringkasan Sebaran Rasio Utama Perbankan & Asuransi terhadap Acuan", style={"fontSize": "14px", "fontWeight": "700", "color": "#111827", "marginBottom": "16px"}),
             html.Div([
                 html.Div([
                     html.Div(r["rasio"], style={"fontSize": "13.5px", "fontWeight": "800", "color": RED, "lineHeight": "1.3"}),
@@ -546,10 +503,9 @@ def update_directory_table(search_val, sektor_val, entitas_type_val, status_anal
         
         # Color mapping for Entity Type pills
         etype_colors = {
-            "EPP": ("#2563EB", "rgba(37,99,235,0.06)", "rgba(37,99,235,0.2)"),
-            "RD": ("#7C3AED", "rgba(124,58,237,0.06)", "rgba(124,58,237,0.2)"),
-            "MI": ("#0D9488", "rgba(13,148,136,0.06)", "rgba(13,148,136,0.2)"),
-            "DES": ("#EA580C", "rgba(234,88,12,0.06)", "rgba(234,88,12,0.2)"),
+            "BANK": ("#2563EB", "rgba(37,99,235,0.06)", "rgba(37,99,235,0.2)"),
+            "BUS": ("#16A34A", "rgba(22,163,74,0.06)", "rgba(22,163,74,0.2)"),
+            "ASR": ("#7C3AED", "rgba(124,58,237,0.06)", "rgba(124,58,237,0.2)"),
         }
         et_c, et_bg, et_b = etype_colors.get(c.get("entitas_type", "EPP"), ("#4B5563", "#F3F4F6", "#E5E7EB"))
         
@@ -560,7 +516,8 @@ def update_directory_table(search_val, sektor_val, entitas_type_val, status_anal
                 style={
                     "color": RED, "fontWeight": "700", "fontSize": "12px",
                     "textDecoration": "none", "background": "#FDF8F7",
-                    "padding": "4px 10px", "borderRadius": "6px", "border": f"1px solid {RED}40"
+                    "padding": "4px 10px", "borderRadius": "6px", "border": f"1px solid {RED}40",
+                    "whiteSpace": "nowrap", "display": "inline-block"
                 }
             )
         else:
@@ -570,7 +527,8 @@ def update_directory_table(search_val, sektor_val, entitas_type_val, status_anal
                 style={
                     "color": "#4B5563", "fontWeight": "600", "fontSize": "12px",
                     "textDecoration": "none", "background": "#F3F4F6",
-                    "padding": "4px 10px", "borderRadius": "6px", "border": "1px solid #E5E7EB"
+                    "padding": "4px 10px", "borderRadius": "6px", "border": "1px solid #E5E7EB",
+                    "whiteSpace": "nowrap", "display": "inline-block"
                 }
             )
 
@@ -588,7 +546,7 @@ def update_directory_table(search_val, sektor_val, entitas_type_val, status_anal
                 _badge(c["status_kepatuhan"]) if c["status_kepatuhan"] != "Belum Dianalisis" else html.Span()
             ])),
             html.Td(_badge(c["ml_risk"])),
-            html.Td(f"{c['mismatch_count']} Mismatch" if c["status_analisis"] == "Sudah Dianalisis" else "—"),
+            html.Td(f"{c['mismatch_count']} Mismatch" if c["status_analisis"] == "Sudah Dianalisis" else "—", style={"whiteSpace": "nowrap"}),
             html.Td(action_btn)
         ]))
 

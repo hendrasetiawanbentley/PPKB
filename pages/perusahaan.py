@@ -9,7 +9,8 @@ import json
 import dash
 from dash import html, dcc, Input, Output, State, callback
 
-from utils.portfolio_data import ALL_COMPANIES, get_mock_company_deep_dive, build_full_pipeline_store
+from utils.portfolio_data import (ALL_COMPANIES, get_mock_company_deep_dive, build_full_pipeline_store,
+                                  DEFAULT_COMPANY_ID, ENTITAS_TYPES, DATA_LABEL)
 from utils.pipeline import run_pdf_analysis, run_excel_analysis, save_upload
 
 dash.register_page(__name__, path="/perusahaan", name="Analisis Per Perusahaan")
@@ -103,12 +104,8 @@ layout = html.Div([
                     dcc.Dropdown(
                         id="perusahaan-entitas-filter",
                         options=[
-                            {"label": "Semua Kategori (All)", "value": "ALL"},
-                            {"label": "Emiten & Perusahaan Publik (EPP)", "value": "EPP"},
-                            {"label": "Reksa Dana (RD)", "value": "RD"},
-                            {"label": "Manajer Investasi (MI)", "value": "MI"},
-                            {"label": "Efek Syariah (DES)", "value": "DES"}
-                        ],
+                            {"label": "Semua Kategori (All)", "value": "ALL"}
+                        ] + [{"label": f"{v} ({k})", "value": k} for k, v in ENTITAS_TYPES.items()],
                         value="ALL",
                         clearable=False,
                         style={"fontSize": "13px"}
@@ -122,7 +119,7 @@ layout = html.Div([
                     dcc.Dropdown(
                         id="perusahaan-portfolio-select",
                         options=PORTFOLIO_OPTIONS,
-                        value="IDX-PTBA",
+                        value=DEFAULT_COMPANY_ID,
                         clearable=False,
                         placeholder="Pilih Perusahaan...",
                         style={"fontSize": "13px"}
@@ -162,7 +159,7 @@ layout = html.Div([
         })
     ]),
 
-    # Location component to read URL query params like ?id=IDX-PTBA
+    # Location component to read URL query params like ?id=IDX-BBCA
     dcc.Location(id="perusahaan-url-location", refresh=False),
 
     # Store pending company metadata (before confirmation)
@@ -229,7 +226,7 @@ def update_select_from_url(search):
                 return comp_id
         except Exception:
             pass
-    return "IDX-PTBA"
+    return DEFAULT_COMPANY_ID
 
 
 @callback(
@@ -329,6 +326,7 @@ def render_deep_dive(selected_id, upload_contents, upload_filename):
                 }
             }
             company_id = f"UPLOAD-{upload_filename}"
+            is_dummy = False
             meta = data.get("doc_meta", {})
             nama_entity = meta.get("nama_entitas", upload_filename)
             sektor = meta.get("sektor", "-")
@@ -352,7 +350,8 @@ def render_deep_dive(selected_id, upload_contents, upload_filename):
 
     else:
         # ── Case 2: Selected from Portfolio ──────────────────────────────────
-        company_id = selected_id or "IDX-PTBA"
+        company_id = selected_id or DEFAULT_COMPANY_ID
+        is_dummy = True
         data = get_mock_company_deep_dive(company_id)
         pipeline_store = build_full_pipeline_store(company_id)
         meta = data.get("doc_meta", {})
@@ -416,8 +415,13 @@ def render_deep_dive(selected_id, upload_contents, upload_filename):
                     html.Span(ml_label, style={
                         "fontSize": "11px", "fontWeight": "700", "color": ml_color,
                         "background": ml_bg, "border": f"1px solid {ml_color}40",
-                        "padding": "3px 10px", "borderRadius": "20px"
+                        "padding": "3px 10px", "borderRadius": "20px", "marginRight": "8px"
                     }),
+                    html.Span(f"⚠️ {DATA_LABEL}", style={
+                        "fontSize": "11px", "fontWeight": "700", "color": "#92400E",
+                        "background": "#FFFBEB", "border": "1px solid #FDE68A",
+                        "padding": "3px 10px", "borderRadius": "20px"
+                    }) if is_dummy else html.Span(),
                 ])
             ], style={"flex": "1"}),
             html.Div("📋 Profil Perusahaan", style={
@@ -434,7 +438,7 @@ def render_deep_dive(selected_id, upload_contents, upload_filename):
         html.Div([
             _info_row("Sektor / Industri", sektor),
             _info_row("Periode Laporan", periode),
-            _info_row("Jenis Entitas", entitas_type),
+            _info_row("Jenis Entitas", ENTITAS_TYPES.get(entitas_type, entitas_type)),
             _info_row("Status Kepatuhan", kep_status),
             _info_row("Risiko ML", ml_label),
         ], style={"display": "flex", "gap": "24px", "flexWrap": "wrap"}),

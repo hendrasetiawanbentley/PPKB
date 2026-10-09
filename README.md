@@ -68,6 +68,13 @@ ojk_dashboard/
 - Kalau nanti CaLK/Rasio/Komparasi butuh data lintas-emiten (bukan cuma 1 file), pola
   upload-nya bisa disamakan dengan modul 5 (`target_companies` dari input text, bukan cuma 1 file).
 
+## Data dummy (Ringkasan Portofolio & Analisis Per Perusahaan)
+Data di beranda dan saat memilih perusahaan dari daftar adalah **data simulasi** emiten
+perbankan & asuransi yang tercatat di IDX (`utils/portfolio_data.py`). Nama emitennya nyata,
+tetapi semua angka, status, rasio, dan temuan dibuat acak dengan seed tetap — bukan hasil
+analisis laporan keuangan sebenarnya. Analisis sungguhan hanya terjadi saat file PDF/Excel di-upload.
+Petunjuk mengubah daftar emiten, rasio, akun, dan tahun laporan ada di bagian atas file tersebut.
+
 ## Menjalankan di Spyder (Anaconda)
 1. Install dependensi di environment yang dipakai Spyder (Anaconda Prompt):
    ```bash
