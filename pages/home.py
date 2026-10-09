@@ -16,12 +16,13 @@ from utils.portfolio_data import (
     CALK_THEME_DETAILS, DATA_LABEL, TAHUN_LAPORAN,
     get_portfolio_summary, get_kepatuhan_portfolio_data,
     get_komparasi_portfolio_data, get_rasio_portfolio_data,
-    get_calk_portfolio_data, get_ml_portfolio_data
+    get_calk_portfolio_data, get_kesimpulan_portfolio_data
 )
 
 dash.register_page(__name__, path="/", name="Ringkasan Portofolio")
 
 RED      = "#8B2E1F"
+TAB_STYLE = {"fontSize": "13px", "fontWeight": "700", "padding": "10px 6px", "lineHeight": "1.3"}
 RED_DARK = "#6B2017"
 WHITE    = "#FFFFFF"
 
@@ -79,7 +80,7 @@ KEPATUHAN_DATA = get_kepatuhan_portfolio_data()
 KOMPARASI_DATA = get_komparasi_portfolio_data()
 RASIO_DATA = get_rasio_portfolio_data()
 CALK_DATA = get_calk_portfolio_data()
-ML_DATA = get_ml_portfolio_data()
+KESIMPULAN_DATA = get_kesimpulan_portfolio_data()
 
 
 # ── Figure Generators ────────────────────────────────────────────────────────
@@ -118,22 +119,6 @@ def _create_komparasi_bar():
         height=260, paper_bgcolor="rgba(0,0,0,0)", plot_bgcolor="rgba(0,0,0,0)"
     )
     fig.update_xaxes(tickangle=0, tickfont=dict(size=9.5, color="#4B5563"))
-    return fig
-
-
-def _create_ml_donut():
-    counts = ML_DATA["ml_risk_counts"]
-    fig = go.Figure(data=[go.Pie(
-        labels=list(counts.keys()),
-        values=list(counts.values()),
-        hole=0.6,
-        marker=dict(colors=["#16A34A", "#D97706", "#DC2626"]),
-        textinfo="label+percent"
-    )])
-    fig.update_layout(
-        showlegend=True, margin=dict(t=20, b=20, l=20, r=20),
-        height=260, paper_bgcolor="rgba(0,0,0,0)", plot_bgcolor="rgba(0,0,0,0)"
-    )
     return fig
 
 
@@ -176,12 +161,12 @@ layout = html.Div([
     # ── Main Portfolio Tabs (5 Modules Overview) ──────────────────────────────
     html.Div([
         dcc.Tabs(id="portfolio-module-tabs", value="tab-kepatuhan", children=[
-            dcc.Tab(label="✅ 1. Kepatuhan Portofolio", value="tab-kepatuhan", style={"fontSize": "13px", "fontWeight": "700"}),
-            dcc.Tab(label="📊 2. Komparasi Portofolio", value="tab-komparasi", style={"fontSize": "13px", "fontWeight": "700"}),
-            dcc.Tab(label="📐 3. Rasio Keuangan", value="tab-rasio", style={"fontSize": "13px", "fontWeight": "700"}),
-            dcc.Tab(label="📝 4. Temuan CaLK (GenAI)", value="tab-calk", style={"fontSize": "13px", "fontWeight": "700"}),
-            dcc.Tab(label="🤖 5. ML Voting Anomali", value="tab-ml", style={"fontSize": "13px", "fontWeight": "700"}),
-        ], style={"height": "42px"}),
+            dcc.Tab(label="✅ 1. Pemeriksaan Kepatuhan", value="tab-kepatuhan", style=TAB_STYLE, selected_style=TAB_STYLE),
+            dcc.Tab(label="📊 2. Analisis Komparasi", value="tab-komparasi", style=TAB_STYLE, selected_style=TAB_STYLE),
+            dcc.Tab(label="📐 3. Analisis Rasio Keuangan", value="tab-rasio", style=TAB_STYLE, selected_style=TAB_STYLE),
+            dcc.Tab(label="📝 4. Analisis CALK", value="tab-calk", style=TAB_STYLE, selected_style=TAB_STYLE),
+            dcc.Tab(label="📋 5. Kesimpulan dan Rekomendasi", value="tab-kesimpulan", style=TAB_STYLE, selected_style=TAB_STYLE),
+        ]),
 
         html.Div(id="portfolio-tab-content", style={"padding": "24px 0 0"})
     ], style={
@@ -396,30 +381,66 @@ def render_tab_content(tab):
             ])
         ])
 
-    elif tab == "tab-ml":
-        return html.Div([
+    elif tab == "tab-kesimpulan":
+        k = KESIMPULAN_DATA
+        temuan_cards = [
             html.Div([
-                # Left Donut
                 html.Div([
-                    html.Div("Distribusi Konsensus Risiko Ensemble ML", style={"fontSize": "14px", "fontWeight": "700", "color": "#111827", "marginBottom": "8px"}),
-                    dcc.Graph(figure=_create_ml_donut(), config={"displayModeBar": False})
-                ], style={"flex": "1", "minWidth": "300px"}),
-
-                # Right Sub-model Breakdown Table
+                    html.Span(t["icon"], style={"fontSize": "16px", "marginRight": "8px"}),
+                    html.Span(t["modul"], style={"fontSize": "13px", "fontWeight": "800", "color": RED}),
+                ], style={"display": "flex", "alignItems": "center", "marginBottom": "6px"}),
+                html.Div(t["teks"], style={"fontSize": "12.5px", "color": "#374151", "lineHeight": "1.55"}),
+            ], style={
+                "background": "#FAFAF9", "borderRadius": "12px", "padding": "14px 16px",
+                "border": "1px solid #EBEBEA",
+            }) for t in k["temuan"]
+        ]
+        prioritas_rows = [
+            html.Tr([
+                html.Td(html.Div([
+                    html.Span(c["ticker"], style={"fontWeight": "800", "marginRight": "6px"}),
+                    html.Span(c["nama"], style={"color": "#4B5563"}),
+                ])),
+                html.Td(f"{c['skor_kepatuhan']:.1f}%", style={"whiteSpace": "nowrap"}),
+                html.Td(_badge(c["status_kepatuhan"])),
+                html.Td(_badge(c["ml_risk"])),
+                html.Td(html.A("Ulas ➔", href=f"/perusahaan?id={c['id']}", style={
+                    "color": "#2563EB", "fontWeight": "700", "fontSize": "12px", "textDecoration": "none",
+                    "background": "#EFF6FF", "padding": "4px 10px", "borderRadius": "6px", "whiteSpace": "nowrap",
+                })),
+            ]) for c in k["prioritas"]
+        ]
+        return html.Div([
+            # Ringkasan umum
+            html.Div(k["ringkasan"], style={
+                "fontSize": "13.5px", "fontWeight": "600", "color": "#111827", "lineHeight": "1.6",
+                "background": "#FDF8F7", "border": f"1px solid {RED}30", "borderLeft": f"4px solid {RED}",
+                "borderRadius": "10px", "padding": "12px 16px", "marginBottom": "18px",
+            }),
+            # Temuan utama per modul
+            html.Div("Temuan Utama per Modul", style={"fontSize": "14px", "fontWeight": "700", "color": "#111827", "marginBottom": "10px"}),
+            html.Div(temuan_cards, style={
+                "display": "grid", "gridTemplateColumns": "repeat(auto-fit, minmax(190px, 1fr))",
+                "gap": "12px", "marginBottom": "22px",
+            }),
+            html.Div([
+                # Rekomendasi
                 html.Div([
-                    html.Div("Deteksi Anomali per Sub-Model Machine Learning", style={"fontSize": "14px", "fontWeight": "700", "color": "#111827", "marginBottom": "12px"}),
+                    html.Div("📌 Rekomendasi Tindak Lanjut", style={"fontSize": "14px", "fontWeight": "700", "color": "#111827", "marginBottom": "10px"}),
+                    html.Ol([
+                        html.Li(r, style={"fontSize": "12.5px", "color": "#374151", "lineHeight": "1.55", "marginBottom": "8px"})
+                        for r in k["rekomendasi"]
+                    ], style={"paddingLeft": "20px", "margin": 0}),
+                ], style={"flex": "1", "minWidth": "320px"}),
+                # Emiten prioritas
+                html.Div([
+                    html.Div("🎯 Emiten Prioritas Tindak Lanjut", style={"fontSize": "14px", "fontWeight": "700", "color": "#111827", "marginBottom": "10px"}),
                     html.Table([
-                        html.Thead(html.Tr([html.Th("Sub-Model Algoritma"), html.Th("Jumlah Terdeteksi"), html.Th("Persentase LK")])),
-                        html.Tbody([
-                            html.Tr([
-                                html.Td(row["model"]),
-                                html.Td(f"{row['anomaly_count']} LK"),
-                                html.Td(f"{row['pct']}%")
-                            ]) for row in ML_DATA["submodel_breakdown"]
-                        ])
-                    ], className="result-table")
-                ], style={"flex": "1.2", "minWidth": "360px"})
-            ], style={"display": "flex", "gap": "24px", "flexWrap": "wrap", "alignItems": "center"})
+                        html.Thead(html.Tr([html.Th("Emiten"), html.Th("Skor"), html.Th("Kepatuhan"), html.Th("Risiko ML"), html.Th("Aksi")])),
+                        html.Tbody(prioritas_rows),
+                    ], className="result-table"),
+                ], style={"flex": "1.3", "minWidth": "420px"}),
+            ], style={"display": "flex", "gap": "24px", "flexWrap": "wrap", "alignItems": "flex-start"}),
         ])
 
     return html.Div()

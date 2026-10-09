@@ -848,3 +848,89 @@ def build_full_pipeline_store(comp_id=None):
             "calk": {k: v for k, v in calk.items() if k != "tentang_entitas"},
         },
     }
+
+
+# ── Kesimpulan & Rekomendasi portofolio (tab ke-5 beranda) ────────────────────
+def get_kesimpulan_portfolio_data():
+    """Rangkum temuan utama tiap modul + rekomendasi + emiten prioritas tindak lanjut."""
+    s = get_portfolio_summary()
+    kp = get_kepatuhan_portfolio_data()["frequent_checklist_issues"]
+    km = get_komparasi_portfolio_data()
+    rs = get_rasio_portfolio_data()["ratios_summary"]
+    ck = get_calk_portfolio_data()["calk_risk_themes"]
+    ml = get_ml_portfolio_data()["submodel_breakdown"]
+
+    temuan = []
+    rekomendasi = []
+
+    # Emiten prioritas: Tidak Patuh dulu, lalu Perlu Reviu, skor terendah di atas
+    urut = {"Tidak Patuh": 0, "Perlu Reviu": 1}
+    prioritas = sorted(
+        [c for c in ANALYZED_COMPANIES if c["status_kepatuhan"] in urut],
+        key=lambda c: (urut[c["status_kepatuhan"]], c["skor_kepatuhan"] or 0),
+    )
+    tidak_patuh = [c for c in prioritas if c["status_kepatuhan"] == "Tidak Patuh"]
+
+    # 1. Kepatuhan
+    teks = (f"{s['patuh_count']} dari {s['num_analyzed']} laporan keuangan yang dianalisis berstatus patuh "
+            f"({s['pct_patuh']}%), {s['reviu_count']} perlu reviu, dan {s['tidak_patuh_count']} tidak patuh.")
+    if kp:
+        teks += f" Kriteria yang paling sering tidak terpenuhi: {kp[0]['kriteria']} ({kp[0]['non_compliant_count']} LK)."
+        rekomendasi.append(f"Minta klarifikasi dan perbaikan atas kriteria \"{kp[0]['kriteria']}\" yang belum terpenuhi pada {kp[0]['non_compliant_count']} laporan keuangan.")
+    temuan.append({"modul": "Pemeriksaan Kepatuhan", "icon": "✅", "teks": teks})
+
+    if tidak_patuh:
+        daftar = ", ".join(c["ticker"] for c in tidak_patuh)
+        rekomendasi.insert(0, f"Lakukan pemeriksaan lanjutan atas {len(tidak_patuh)} emiten berstatus Tidak Patuh / Terindikasi Anomali: {daftar}.")
+
+    # 2. Komparasi
+    total_mm = sum(km["mismatch_by_sektor"].values())
+    teks = f"Terdapat {total_mm} selisih material (≥30%) antar periode {TAHUN_LAPORAN} vs {TAHUN_PEMBANDING}."
+    if total_mm:
+        sektor_top = max(km["mismatch_by_sektor"].items(), key=lambda kv: kv[1])[0]
+        teks += f" Terbanyak pada sektor {sektor_top}."
+    if km["mismatch_categories"]:
+        a = km["mismatch_categories"][0]
+        teks += f" Akun paling sering berubah material: {a['akun']} ({a['flags']} LK)."
+        rekomendasi.append(f"Telaah penyebab perubahan material pada akun \"{a['akun']}\" bersama manajemen emiten terkait.")
+    temuan.append({"modul": "Analisis Komparasi", "icon": "📊", "teks": teks})
+
+    # 3. Rasio
+    if rs:
+        terburuk = max(rs, key=lambda r: r["warning_pct"])
+        teks = (f"Rasio dengan porsi terbesar di luar acuan: {terburuk['rasio']} "
+                f"({terburuk['warning_pct']}% LK; rata-rata {terburuk['mean']}).")
+        if terburuk["warning_pct"] > 0:
+            rekomendasi.append(f"Pantau {terburuk['rasio']}: {terburuk['warning_pct']}% laporan keuangan berada di luar acuan.")
+    else:
+        teks = "Belum ada data rasio."
+    temuan.append({"modul": "Analisis Rasio Keuangan", "icon": "📐", "teks": teks})
+
+    # 4. CaLK
+    if ck:
+        teks = f"Tema pengungkapan berisiko paling sering: {ck[0]['topik']} ({ck[0]['count']} LK)"
+        teks += f", diikuti {ck[1]['topik']} ({ck[1]['count']} LK)." if len(ck) > 1 else "."
+        rekomendasi.append(f"Dalami pengungkapan CaLK terkait \"{ck[0]['topik']}\" pada {ck[0]['count']} laporan keuangan.")
+    else:
+        teks = "Tidak ada tema CaLK berisiko."
+    temuan.append({"modul": "Analisis CALK", "icon": "📝", "teks": teks})
+
+    # 5. ML (dirangkum di kesimpulan)
+    ens = next((m for m in ml if m["model"].startswith("Ensemble")), None)
+    sub = max((m for m in ml if not m["model"].startswith("Ensemble")), key=lambda m: m["anomaly_count"], default=None)
+    teks = (f"{s['anomali_ml_count']} LK ({s['pct_anomali_ml']}%) terindikasi anomali oleh konsensus ensemble machine learning.")
+    if sub:
+        teks += f" Deteksi terbanyak oleh {sub['model'].split(' (')[0]} ({sub['anomaly_count']} LK)."
+    temuan.append({"modul": "Deteksi Anomali (ML)", "icon": "🤖", "teks": teks})
+
+    if s["num_pending"]:
+        rekomendasi.append(f"Selesaikan analisis atas {s['num_pending']} laporan keuangan yang belum dianalisis.")
+
+    return {
+        "ringkasan": (f"Dari {s['total_lk']} laporan keuangan tahunan {TAHUN_LAPORAN} emiten perbankan & asuransi, "
+                      f"{s['num_analyzed']} telah dianalisis dengan rata-rata skor kepatuhan {s['avg_score']}%. "
+                      f"{len(prioritas)} emiten memerlukan tindak lanjut ({len(tidak_patuh)} prioritas tinggi)."),
+        "temuan": temuan,
+        "rekomendasi": rekomendasi,
+        "prioritas": prioritas[:10],
+    }
