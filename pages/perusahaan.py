@@ -10,7 +10,7 @@ import dash
 from dash import html, dcc, Input, Output, State, callback
 
 from utils.portfolio_data import (ALL_COMPANIES, get_mock_company_deep_dive, build_full_pipeline_store,
-                                  DEFAULT_COMPANY_ID, ENTITAS_TYPES, DATA_LABEL)
+                                  DEFAULT_COMPANY_ID, ENTITAS_TYPES, DATA_LABEL, KEPATUHAN_THRESHOLD)
 from utils.pipeline import run_pdf_analysis, run_excel_analysis, save_upload
 
 dash.register_page(__name__, path="/perusahaan", name="Analisis Per Perusahaan")
@@ -261,12 +261,18 @@ def render_deep_dive(selected_id, upload_contents, upload_filename):
             ml_raw = res.get("ml", {}) or res.get("ml_voting", {})
             ml_dict = list(ml_raw.values())[0] if ml_raw else {}
 
+            # Skor kepatuhan = % kriteria terpenuhi dari kriteria yang dapat dievaluasi (YA / (YA + TIDAK))
+            _kp = res.get("kepatuhan", {}) or {}
+            _ya, _tidak = _kp.get("ya", 0) or 0, _kp.get("tidak", 0) or 0
+            skor_upload = round(_ya / (_ya + _tidak) * 100, 1) if (_ya + _tidak) else 0.0
+            status_upload = "PATUH" if skor_upload >= KEPATUHAN_THRESHOLD else "TIDAK PATUH"
+
             data = {
                 "file_name": upload_filename,
                 "doc_meta": res.get("meta", {}),
                 "kepatuhan": {
-                    "skor": 92.0 if res.get("kepatuhan", {}).get("ya", 0) > 15 else 75.0,
-                    "status": "PATUH" if res.get("kepatuhan", {}).get("ya", 0) > 15 else "PERLU REVIU",
+                    "skor": skor_upload,
+                    "status": status_upload,
                     "penjelasan": res.get("kepatuhan", {}).get("narrative", "Hasil evaluasi kepatuhan."),
                     "checklist": [
                         {
@@ -332,7 +338,7 @@ def render_deep_dive(selected_id, upload_contents, upload_filename):
             sektor = meta.get("sektor", "-")
             periode = meta.get("periode", "-")
             entitas_type = "EPP"
-            kep_status = data.get("kepatuhan", {}).get("status", "PERLU REVIU")
+            kep_status = data.get("kepatuhan", {}).get("status", "TIDAK PATUH")
 
             short_name = upload_filename[:25] + "..." if len(upload_filename) > 28 else upload_filename
             upload_btn_content = html.Div([
@@ -358,13 +364,15 @@ def render_deep_dive(selected_id, upload_contents, upload_filename):
         nama_entity = meta.get("nama_entitas", company_id)
         sektor = meta.get("sektor", "-")
         periode = meta.get("periode", "-")
-        kep_status = data.get("kepatuhan", {}).get("status", "PERLU REVIU")
+        kep_status = data.get("kepatuhan", {}).get("status", "TIDAK PATUH")
         ml_label = data.get("ml_voting", {}).get("risk_label", "Risiko Rendah")
         entitas_type = COMPANY_BY_ID.get(company_id, {}).get("entitas_type", "-")
         upload_btn_content = html.Div([
             html.Span("📁 Drag & Drop atau Klik Upload File (PDF / Excel)",
                       style={"fontSize": "12.5px", "fontWeight": "700", "color": RED})
         ])
+
+    kep_skor = data.get("kepatuhan", {}).get("skor")
 
     # ── Build pending meta to store ───────────────────────────────────────────
     pending_meta = {
@@ -439,7 +447,7 @@ def render_deep_dive(selected_id, upload_contents, upload_filename):
             _info_row("Sektor / Industri", sektor),
             _info_row("Periode Laporan", periode),
             _info_row("Jenis Entitas", ENTITAS_TYPES.get(entitas_type, entitas_type)),
-            _info_row("Status Kepatuhan", kep_status),
+            _info_row("Status Kepatuhan", f"{kep_status} (skor {kep_skor:.1f}%)" if isinstance(kep_skor, (int, float)) else kep_status),
             _info_row("Risiko ML", ml_label),
         ], style={"display": "flex", "gap": "24px", "flexWrap": "wrap"}),
 

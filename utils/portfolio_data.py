@@ -16,6 +16,7 @@ Cara mengubah data dummy:
   * Ubah akun komparasi  -> BANK_ACCOUNTS, BUS_ACCOUNTS, ASR_ACCOUNTS
   * Tahun laporan        -> TAHUN_LAPORAN
   * Ambang komparasi APOLO -> KOMPARASI_TOLERANSI_PCT
+  * Batas skor Patuh      -> KEPATUHAN_THRESHOLD
 """
 
 import random
@@ -30,6 +31,9 @@ DATA_LABEL = "Data Simulasi (Dummy)"
 SUMBER_LK = f"Laporan Keuangan Audited {TAHUN_LAPORAN}"
 SUMBER_APOLO = f"Laporan Tahunan APOLO {TAHUN_LAPORAN}"
 KOMPARASI_TOLERANSI_PCT = 5.0   # selisih > 5% dari nilai APOLO -> "Tidak Sesuai"
+
+# Status kepatuhan: skor kepatuhan >= 90% -> "Patuh", di bawahnya -> "Tidak Patuh"
+KEPATUHAN_THRESHOLD = 90.0
 
 # ── Kategori entitas & sektor ─────────────────────────────────────────────────
 ENTITAS_TYPES = {
@@ -298,24 +302,30 @@ def _generate_companies():
         if analyzed:
             pattern = k_analyzed % 7
             k_analyzed += 1
+            # risk_tier: tingkat risiko simulasi (menentukan skor, ML, mismatch, temuan CaLK)
             if pattern == 3:
-                status_kepatuhan, ml_risk = "Tidak Patuh", "Terindikasi Anomali"
+                risk_tier, ml_risk = "tinggi", "Terindikasi Anomali"
                 skor = round(rng.uniform(55.0, 74.0), 1)
                 mismatch_count = rng.choice([3, 4, 5])
                 calk_risk_count = rng.choice([3, 4])
             elif pattern in (1, 5):
-                status_kepatuhan, ml_risk = "Perlu Reviu", "Risiko Sedang"
-                skor = round(rng.uniform(75.0, 87.0), 1)
+                risk_tier, ml_risk = "sedang", "Risiko Sedang"
+                skor = round(rng.uniform(75.0, KEPATUHAN_THRESHOLD - 0.5), 1)
                 mismatch_count = rng.choice([1, 2, 3])
                 calk_risk_count = rng.choice([2, 3])
             else:
-                status_kepatuhan, ml_risk = "Patuh", "Risiko Rendah"
-                skor = round(rng.uniform(88.0, 98.5), 1)
+                risk_tier, ml_risk = "rendah", "Risiko Rendah"
+                skor = round(rng.uniform(KEPATUHAN_THRESHOLD, 98.5), 1)
                 mismatch_count = rng.choice([0, 0, 1])
                 calk_risk_count = rng.choice([0, 1])
         else:
-            status_kepatuhan, ml_risk, skor = "Belum Dianalisis", "Belum Dianalisis", None
+            risk_tier, ml_risk, skor = None, "Belum Dianalisis", None
             mismatch_count = calk_risk_count = 0
+
+        if skor is None:
+            status_kepatuhan = "Belum Dianalisis"
+        else:
+            status_kepatuhan = "Patuh" if skor >= KEPATUHAN_THRESHOLD else "Tidak Patuh"
 
         lo, hi = SEKTOR_ASET[sektor]
         aset = ASET_HINT[ticker] * rng.uniform(0.9, 1.1) if ticker in ASET_HINT else rng.uniform(lo, hi)
@@ -330,6 +340,7 @@ def _generate_companies():
             "status_analisis": "Sudah Dianalisis" if analyzed else "Belum Dianalisis",
             "status_kepatuhan": status_kepatuhan,
             "skor_kepatuhan": skor,
+            "risk_tier": risk_tier,
             "ml_risk": ml_risk,
             "mismatch_count": mismatch_count,
             "calk_risk_count": calk_risk_count,
@@ -418,7 +429,7 @@ def _komparasi_for(company, rng):
 
 def _rasio_for(company, rng):
     defs = RATIOS_BY_TYPE[company["entitas_type"]]
-    n_bad = {"Tidak Patuh": 3, "Perlu Reviu": 1}.get(company["status_kepatuhan"], 0)
+    n_bad = {"tinggi": 3, "sedang": 1}.get(company["risk_tier"], 0)
     bad_idx = set(rng.sample(range(len(defs)), n_bad))
     items, vals = [], {}
     for i, (key, nama, kategori, acuan, sehat, buruk) in enumerate(defs):
@@ -558,7 +569,7 @@ def get_mock_company_deep_dive(comp_id):
             "Evaluasi kolektibilitas piutang reasuransi dan penyelesaian klaim dalam sengketa.",
         ]
 
-    status_label = status_kp.upper() if status_kp != "Belum Dianalisis" else "PERLU REVIU"
+    status_label = status_kp.upper()
     deep = {
         "file_name": f"{company['ticker']}_LK_Tahunan_{TAHUN_LAPORAN}.pdf",
         "doc_meta": {
@@ -571,7 +582,9 @@ def get_mock_company_deep_dive(comp_id):
         "kepatuhan": {
             "skor": company["skor_kepatuhan"] or 90.0,
             "status": status_label,
-            "penjelasan": f"Laporan keuangan {company['nama']} secara umum berstatus {status_kp.lower()} terhadap ketentuan penyajian laporan keuangan emiten sektor jasa keuangan.",
+            "penjelasan": (f"Skor kepatuhan laporan keuangan {company['nama']} {company['skor_kepatuhan']:.1f}% "
+                           f"sehingga berstatus {status_kp.lower()} (batas patuh: skor ≥ {KEPATUHAN_THRESHOLD:g}%)."
+                           if company["skor_kepatuhan"] is not None else "Laporan keuangan belum dianalisis."),
             "checklist": _checklist_for(company),
         },
         "komparasi": {
@@ -610,7 +623,6 @@ def get_portfolio_summary():
     num_analyzed = len(analyzed_df)
 
     patuh_count = int((analyzed_df["status_kepatuhan"] == "Patuh").sum())
-    reviu_count = int((analyzed_df["status_kepatuhan"] == "Perlu Reviu").sum())
     tidak_patuh_count = int((analyzed_df["status_kepatuhan"] == "Tidak Patuh").sum())
     anomali_ml_count = int((analyzed_df["ml_risk"] == "Terindikasi Anomali").sum())
 
@@ -620,10 +632,8 @@ def get_portfolio_summary():
         "num_pending": total_lk - num_analyzed,
         "pct_analyzed": _pct(num_analyzed, total_lk),
         "patuh_count": patuh_count,
-        "reviu_count": reviu_count,
         "tidak_patuh_count": tidak_patuh_count,
         "pct_patuh": _pct(patuh_count, num_analyzed),
-        "pct_reviu": _pct(reviu_count, num_analyzed),
         "pct_tidak_patuh": _pct(tidak_patuh_count, num_analyzed),
         "anomali_ml_count": anomali_ml_count,
         "pct_anomali_ml": _pct(anomali_ml_count, num_analyzed),
@@ -882,17 +892,16 @@ def get_kesimpulan_portfolio_data():
     temuan = []
     rekomendasi = []
 
-    # Emiten prioritas: Tidak Patuh dulu, lalu Perlu Reviu, skor terendah di atas
-    urut = {"Tidak Patuh": 0, "Perlu Reviu": 1}
+    # Emiten prioritas: semua yang Tidak Patuh (skor < batas), skor terendah di atas
     prioritas = sorted(
-        [c for c in ANALYZED_COMPANIES if c["status_kepatuhan"] in urut],
-        key=lambda c: (urut[c["status_kepatuhan"]], c["skor_kepatuhan"] or 0),
+        [c for c in ANALYZED_COMPANIES if c["status_kepatuhan"] == "Tidak Patuh"],
+        key=lambda c: c["skor_kepatuhan"] or 0,
     )
-    tidak_patuh = [c for c in prioritas if c["status_kepatuhan"] == "Tidak Patuh"]
+    tidak_patuh = [c for c in prioritas if c["ml_risk"] == "Terindikasi Anomali"]  # prioritas tinggi
 
     # 1. Kepatuhan
     teks = (f"{s['patuh_count']} dari {s['num_analyzed']} laporan keuangan yang dianalisis berstatus patuh "
-            f"({s['pct_patuh']}%), {s['reviu_count']} perlu reviu, dan {s['tidak_patuh_count']} tidak patuh.")
+            f"({s['pct_patuh']}%) dan {s['tidak_patuh_count']} tidak patuh (skor < {KEPATUHAN_THRESHOLD:g}%).")
     if kp:
         teks += f" Kriteria yang paling sering tidak terpenuhi: {kp[0]['kriteria']} ({kp[0]['non_compliant_count']} LK)."
         rekomendasi.append(f"Minta klarifikasi dan perbaikan atas kriteria \"{kp[0]['kriteria']}\" yang belum terpenuhi pada {kp[0]['non_compliant_count']} laporan keuangan.")
@@ -900,7 +909,7 @@ def get_kesimpulan_portfolio_data():
 
     if tidak_patuh:
         daftar = ", ".join(c["ticker"] for c in tidak_patuh)
-        rekomendasi.insert(0, f"Lakukan pemeriksaan lanjutan atas {len(tidak_patuh)} emiten berstatus Tidak Patuh / Terindikasi Anomali: {daftar}.")
+        rekomendasi.insert(0, f"Lakukan pemeriksaan lanjutan atas {len(tidak_patuh)} emiten Tidak Patuh yang juga terindikasi anomali ML: {daftar}.")
 
     # 2. Komparasi
     total_mm = sum(km["mismatch_by_sektor"].values())
@@ -950,7 +959,8 @@ def get_kesimpulan_portfolio_data():
     return {
         "ringkasan": (f"Dari {s['total_lk']} laporan keuangan tahunan {TAHUN_LAPORAN} emiten perbankan & asuransi, "
                       f"{s['num_analyzed']} telah dianalisis dengan rata-rata skor kepatuhan {s['avg_score']}%. "
-                      f"{len(prioritas)} emiten memerlukan tindak lanjut ({len(tidak_patuh)} prioritas tinggi)."),
+                      f"{len(prioritas)} emiten tidak patuh (skor < {KEPATUHAN_THRESHOLD:g}%) dan memerlukan tindak lanjut "
+                      f"({len(tidak_patuh)} prioritas tinggi karena juga terindikasi anomali)."),
         "temuan": temuan,
         "rekomendasi": rekomendasi,
         "prioritas": prioritas[:10],

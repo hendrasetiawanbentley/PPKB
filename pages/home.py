@@ -14,7 +14,7 @@ import pandas as pd
 from utils.portfolio_data import (
     ALL_COMPANIES, SEKTOR_LIST, SEKTOR_SHORT, ENTITAS_TYPES,
     CALK_THEME_DETAILS, DATA_LABEL, TAHUN_LAPORAN,
-    SUMBER_LK, SUMBER_APOLO, KOMPARASI_TOLERANSI_PCT,
+    SUMBER_LK, SUMBER_APOLO, KOMPARASI_TOLERANSI_PCT, KEPATUHAN_THRESHOLD,
     get_portfolio_summary, get_kepatuhan_portfolio_data,
     get_komparasi_portfolio_data, get_rasio_portfolio_data,
     get_calk_portfolio_data, get_kesimpulan_portfolio_data
@@ -86,18 +86,21 @@ KESIMPULAN_DATA = get_kesimpulan_portfolio_data()
 
 # ── Figure Generators ────────────────────────────────────────────────────────
 def _create_kepatuhan_donut():
-    labels = ["Patuh", "Perlu Reviu", "Tidak Patuh"]
-    values = [SUMMARY["patuh_count"], SUMMARY["reviu_count"], SUMMARY["tidak_patuh_count"]]
-    colors = ["#16A34A", "#D97706", "#DC2626"]
+    thr = f"{KEPATUHAN_THRESHOLD:g}%"
+    labels = [f"Patuh (skor ≥ {thr})", f"Tidak Patuh (skor < {thr})"]
+    values = [SUMMARY["patuh_count"], SUMMARY["tidak_patuh_count"]]
+    colors = ["#16A34A", "#DC2626"]
     
     fig = go.Figure(data=[go.Pie(
         labels=labels, values=values, hole=0.6,
-        marker=dict(colors=colors), textinfo="label+percent",
-        hoverinfo="label+value+percent"
+        marker=dict(colors=colors), textinfo="percent", textfont=dict(size=13),
+        hovertemplate="%{label}<br>%{value} LK (%{percent})<extra></extra>", sort=False,
     )])
     fig.update_layout(
-        showlegend=True, margin=dict(t=20, b=20, l=20, r=20),
-        height=260, paper_bgcolor="rgba(0,0,0,0)", plot_bgcolor="rgba(0,0,0,0)"
+        showlegend=True, margin=dict(t=10, b=10, l=10, r=10),
+        height=320, paper_bgcolor="rgba(0,0,0,0)", plot_bgcolor="rgba(0,0,0,0)",
+        legend=dict(title=dict(text=f"<b>Batas patuh: skor kepatuhan ≥ {thr}</b>", side="top"),
+                    orientation="h", x=0.5, xanchor="center", y=-0.02, yanchor="top", font=dict(size=12)),
     )
     return fig
 
@@ -246,7 +249,6 @@ layout = html.Div([
                     options=[
                         {"label": "Semua Status Kepatuhan", "value": "ALL"},
                         {"label": "Patuh", "value": "Patuh"},
-                        {"label": "Perlu Reviu", "value": "Perlu Reviu"},
                         {"label": "Tidak Patuh", "value": "Tidak Patuh"}
                     ],
                     value="ALL", clearable=False, style={"fontSize": "13px"}
@@ -565,7 +567,7 @@ def update_directory_table(search_val, sektor_val, entitas_type_val, status_anal
             html.Td(c["sektor"]),
             html.Td(_badge(c["status_analisis"])),
             html.Td(html.Div([
-                html.Span(skor_str, style={"fontWeight": "700", "color": RED if c["skor_kepatuhan"] and c["skor_kepatuhan"] < 80 else "#111827"}),
+                html.Span(skor_str, style={"fontWeight": "700", "color": RED if c["skor_kepatuhan"] is not None and c["skor_kepatuhan"] < KEPATUHAN_THRESHOLD else "#111827"}),
                 html.Span(" "),
                 _badge(c["status_kepatuhan"]) if c["status_kepatuhan"] != "Belum Dianalisis" else html.Span()
             ])),
