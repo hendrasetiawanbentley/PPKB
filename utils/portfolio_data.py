@@ -625,6 +625,10 @@ def get_portfolio_summary():
     patuh_count = int((analyzed_df["status_kepatuhan"] == "Patuh").sum())
     tidak_patuh_count = int((analyzed_df["status_kepatuhan"] == "Tidak Patuh").sum())
     anomali_ml_count = int((analyzed_df["ml_risk"] == "Terindikasi Anomali").sum())
+    # Butuh penelaahan pengawas = tidak patuh (skor < batas) DAN terindikasi anomali ML
+    # (sama dengan "prioritas tinggi" di tab Kesimpulan dan Rekomendasi)
+    penelaahan_count = int(((analyzed_df["status_kepatuhan"] == "Tidak Patuh")
+                            & (analyzed_df["ml_risk"] == "Terindikasi Anomali")).sum())
 
     return {
         "total_lk": total_lk,
@@ -637,6 +641,8 @@ def get_portfolio_summary():
         "pct_tidak_patuh": _pct(tidak_patuh_count, num_analyzed),
         "anomali_ml_count": anomali_ml_count,
         "pct_anomali_ml": _pct(anomali_ml_count, num_analyzed),
+        "penelaahan_count": penelaahan_count,
+        "pct_penelaahan": _pct(penelaahan_count, num_analyzed),
         "avg_score": round(analyzed_df["skor_kepatuhan"].mean(), 1) if num_analyzed else 0.0,
     }
 

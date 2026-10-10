@@ -156,7 +156,7 @@ layout = html.Div([
     html.Div([
         _kpi_card("Total Laporan Keuangan", f"{SUMMARY['total_lk']}", f"{SUMMARY['num_analyzed']} Dianalisis ({SUMMARY['pct_analyzed']}%)", RED, "📄"),
         _kpi_card("Tingkat Kepatuhan", f"{SUMMARY['pct_patuh']}%", f"{SUMMARY['patuh_count']} dari {SUMMARY['num_analyzed']} Patuh", "#16A34A", "✅"),
-        _kpi_card("Anomali ML Flagged", f"{SUMMARY['anomali_ml_count']}", f"{SUMMARY['pct_anomali_ml']}% Terindikasi Anomali", "#DC2626", "🤖"),
+        _kpi_card("Butuh Penelaahan Pengawas", f"{SUMMARY['penelaahan_count']}", f"{SUMMARY['pct_penelaahan']}% LK · tidak patuh & anomali", "#DC2626", "🔍"),
         _kpi_card("Rata-Rata Skor Kepatuhan", f"{SUMMARY['avg_score']}%", "Skor Portofolio", "#2563EB", "📐"),
     ], style={
         "display": "flex", "gap": "16px", "flexWrap": "wrap", "padding": "24px 36px 0"
